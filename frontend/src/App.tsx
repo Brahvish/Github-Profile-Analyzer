@@ -1,5 +1,5 @@
 import { useEffect, lazy, Suspense } from 'react';
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { Navbar } from '@/components/layout/Navbar';
 import { Footer } from '@/components/layout/Footer';
 import { useStore } from '@/store/useStore';
@@ -12,6 +12,7 @@ const ReportPage = lazy(() => import('@/pages/ReportPage').then(m => ({ default:
 const ComparePage = lazy(() => import('@/pages/ComparePage').then(m => ({ default: m.ComparePage })));
 const SavedReportsPage = lazy(() => import('@/pages/SavedReportsPage').then(m => ({ default: m.SavedReportsPage })));
 const AboutPage = lazy(() => import('@/pages/AboutPage').then(m => ({ default: m.AboutPage })));
+const LoginPage = lazy(() => import('@/pages/LoginPage').then(m => ({ default: m.LoginPage })));
 
 function PageLoader() {
   return (
@@ -19,6 +20,66 @@ function PageLoader() {
       <ProfileSkeleton />
     </div>
   );
+}
+
+function AppShell() {
+  const location = useLocation();
+  const isLoginPage = location.pathname === '/login';
+
+  return (
+    <div className="min-h-screen flex flex-col bg-[#080A0F]">
+      {!isLoginPage && <Navbar />}
+
+      <main className="flex-1">
+        <Suspense fallback={<PageLoader />}>
+          <Routes>
+            <Route path="/" element={<LandingPage />} />
+            <Route path="/login" element={<LoginPage />} />
+            <Route path="/analyze" element={<AnalyzerPage />} />
+            <Route path="/report/:username" element={<ReportPage />} />
+            <Route path="/compare" element={<ComparePage />} />
+            <Route path="/saved" element={<SavedReportsPage />} />
+            <Route path="/about" element={<AboutPage />} />
+            <Route path="*" element={<Navigate to="/" replace />} />
+          </Routes>
+        </Suspense>
+      </main>
+
+      {!isLoginPage && <Footer />}
+    </div>
+  );
+}
+
+/**
+ * Listens to Firebase auth state and syncs to Zustand.
+ * Placed inside BrowserRouter so it can use router hooks if needed.
+ * Lazy-imports Firebase so the app doesn't crash when env vars aren't set.
+ */
+function AuthProvider() {
+  const { setFirebaseUser, clearAuth } = useStore();
+
+  useEffect(() => {
+    let unsubscribe: (() => void) | undefined;
+
+    Promise.all([
+      import('@/lib/firebase'),
+      import('firebase/auth'),
+    ]).then(([{ auth }, { onAuthStateChanged }]) => {
+      unsubscribe = onAuthStateChanged(auth, (user) => {
+        if (user) {
+          setFirebaseUser(user);
+        } else {
+          clearAuth();
+        }
+      });
+    }).catch(() => {
+      // Firebase not yet configured — silent fail, login page shows friendly message
+    });
+
+    return () => { if (unsubscribe) unsubscribe(); };
+  }, [setFirebaseUser, clearAuth]);
+
+  return null;
 }
 
 export default function App() {
@@ -31,25 +92,8 @@ export default function App() {
 
   return (
     <BrowserRouter>
-      <div className="min-h-screen flex flex-col bg-[#080A0F]">
-        <Navbar />
-
-        <main className="flex-1">
-          <Suspense fallback={<PageLoader />}>
-            <Routes>
-              <Route path="/" element={<LandingPage />} />
-              <Route path="/analyze" element={<AnalyzerPage />} />
-              <Route path="/report/:username" element={<ReportPage />} />
-              <Route path="/compare" element={<ComparePage />} />
-              <Route path="/saved" element={<SavedReportsPage />} />
-              <Route path="/about" element={<AboutPage />} />
-              <Route path="*" element={<Navigate to="/" replace />} />
-            </Routes>
-          </Suspense>
-        </main>
-
-        <Footer />
-      </div>
+      <AuthProvider />
+      <AppShell />
     </BrowserRouter>
   );
 }

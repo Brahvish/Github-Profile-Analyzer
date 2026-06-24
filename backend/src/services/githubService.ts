@@ -6,15 +6,22 @@ import { sleep } from '../utils/helpers.js';
 const BASE_URL = 'https://api.github.com';
 
 function createGitHubClient(): AxiosInstance {
+  const headers: Record<string, string> = {
+    'Accept': 'application/vnd.github.v3+json',
+    'User-Agent': 'GitInsight-App/1.0',
+  };
+
+  if (process.env.GITHUB_TOKEN) {
+    headers['Authorization'] = `Bearer ${process.env.GITHUB_TOKEN}`;
+  }
+
   return axios.create({
     baseURL: BASE_URL,
     timeout: 15000,
-    headers: {
-      'Accept': 'application/vnd.github.v3+json',
-      'User-Agent': 'GitInsight-App/1.0',
-    },
+    headers,
   });
 }
+
 
 const client = createGitHubClient();
 
